@@ -14,6 +14,13 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
     @Published var mirror: Bool = (UserDefaults.standard.object(forKey: "mirrorVideo") as? Bool) ?? true
     private var videoDevice: AVCaptureDevice?
 
+    @Published var mirrorFile: Bool = (UserDefaults.standard.object(forKey: "mirrorFile") as? Bool) ?? false
+
+    func setMirrorFile(_ value: Bool) {
+        mirrorFile = value
+        UserDefaults.standard.set(value, forKey: "mirrorFile")
+    }
+
     func setMirror(_ value: Bool) {
         mirror = value
         UserDefaults.standard.set(value, forKey: "mirrorVideo")
@@ -95,7 +102,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
             if conn.isVideoStabilizationSupported { conn.preferredVideoStabilizationMode = .off }
             if conn.isVideoMirroringSupported {
                 conn.automaticallyAdjustsVideoMirroring = false
-                conn.isVideoMirrored = self.mirror   // как в Blackmagic: зеркальная запись
+                conn.isVideoMirrored = self.mirrorFile   // запись по умолчанию без зеркала
             }
         }
 
@@ -110,7 +117,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
             } else {
                 if let conn = self.movieOutput.connection(with: .video), conn.isVideoMirroringSupported {
                     conn.automaticallyAdjustsVideoMirroring = false
-                    conn.isVideoMirrored = self.mirror
+                    conn.isVideoMirrored = self.mirrorFile
                 }
                 self.lockExposureAndWB(true)
                 let url = FileManager.default.temporaryDirectory

@@ -113,7 +113,10 @@ struct ContentView: View {
                 }
 
                 Button { camera.setMirror(!camera.mirror) } label: {
-                    icon("person.crop.square.filled.and.at.rectangle", active: camera.mirror)
+                    icon("eye", active: camera.mirror)          // зеркальное превью
+                }
+                Button { camera.setMirrorFile(!camera.mirrorFile) } label: {
+                    icon("film", active: camera.mirrorFile)     // зеркальная запись в файл
                 }
                 Button { mirrorText.toggle() } label: {
                     icon("arrow.left.and.right.righttriangle.left.righttriangle.right", active: mirrorText)
