@@ -57,7 +57,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
         }
         if session.canAddOutput(movieOutput) { session.addOutput(movieOutput) }
 
-        // Формат: максимум разрешения до 4K при 30 fps, 8-бит SDR (без HDR/HLG), без binning
+        // Формат: максимум разрешения до 4K при 30 fps, предпочтительно 10-бит HLG, без binning
         var best: AVCaptureDevice.Format?
         var bestScore = -1
         for format in device.formats {
@@ -67,9 +67,8 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
                 $0.minFrameRate <= 30 && $0.maxFrameRate >= 30
             }
             guard supports30 else { continue }
-            let subtype = CMFormatDescriptionGetMediaSubType(format.formatDescription)
-            let is8bit = subtype == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-            let score = Int(dims.width) + (is8bit ? 100_000 : 0) + (format.isVideoBinned ? 0 : 10_000)
+            let hlg = format.supportedColorSpaces.contains(.HLG_BT2020)
+            let score = Int(dims.width) + (hlg ? 100_000 : 0) + (format.isVideoBinned ? 0 : 10_000)
             if score > bestScore {
                 best = format
                 bestScore = score
@@ -79,13 +78,26 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
             device.activeFormat = best
             device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 30)
             device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
-            if best.isVideoHDRSupported {
+            let useHLG = best.supportedColorSpaces.contains(.HLG_BT2020)
+            if useHLG {
+                device.activeColorSpace = .HLG_BT2020   // 10-бит HDR, как в стандартной камере
+            } else if best.isVideoHDRSupported {
                 device.automaticallyAdjustsVideoHDREnabled = false
                 device.isVideoHDREnabled = true
             }
+            // Экспозиция и фокус по лицу, как в стандартной камере
+            if #available(iOS 15.4, *) {
+                device.automaticallyAdjustsFaceDrivenAutoExposureEnabled = false
+                device.isFaceDrivenAutoExposureEnabled = true
+            }
+            // Чуть ярче, чем нейтральная авто-экспозиция
+            let bias = max(device.minExposureTargetBias, min(0.7, device.maxExposureTargetBias))
+            device.setExposureTargetBias(bias, completionHandler: nil)
             device.unlockForConfiguration()
             let d = CMVideoFormatDescriptionGetDimensions(best.formatDescription)
-            DispatchQueue.main.async { self.info = "\(d.width)×\(d.height) 30fps HEVC 100 Mbps" }
+            DispatchQueue.main.async {
+                self.info = "\(d.width)×\(d.height) 30fps HEVC 100 Mbps " + (useHLG ? "HLG" : "SDR")
+            }
         }
 
         session.commitConfiguration()
