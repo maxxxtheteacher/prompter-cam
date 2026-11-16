@@ -11,6 +11,13 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
     @Published var isRecording = false
     @Published var info = ""
     @Published var ready = false
+    @Published var mirror: Bool = (UserDefaults.standard.object(forKey: "mirrorVideo") as? Bool) ?? true
+    private var videoDevice: AVCaptureDevice?
+
+    func setMirror(_ value: Bool) {
+        mirror = value
+        UserDefaults.standard.set(value, forKey: "mirrorVideo")
+    }
 
     func start() {
         AVCaptureDevice.requestAccess(for: .video) { ok in
@@ -31,6 +38,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
               let videoInput = try? AVCaptureDeviceInput(device: device) else { return }
 
+        videoDevice = device
         session.beginConfiguration()
         session.sessionPreset = .inputPriority
 
@@ -66,7 +74,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
             device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
             if best.isVideoHDRSupported {
                 device.automaticallyAdjustsVideoHDREnabled = false
-                device.isVideoHDREnabled = false
+                device.isVideoHDREnabled = true
             }
             device.unlockForConfiguration()
             let d = CMVideoFormatDescriptionGetDimensions(best.formatDescription)
@@ -87,7 +95,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
             if conn.isVideoStabilizationSupported { conn.preferredVideoStabilizationMode = .off }
             if conn.isVideoMirroringSupported {
                 conn.automaticallyAdjustsVideoMirroring = false
-                conn.isVideoMirrored = false   // запись не зеркальная
+                conn.isVideoMirrored = self.mirror   // как в Blackmagic: зеркальная запись
             }
         }
 
@@ -100,11 +108,31 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
             if self.movieOutput.isRecording {
                 self.movieOutput.stopRecording()
             } else {
+                if let conn = self.movieOutput.connection(with: .video), conn.isVideoMirroringSupported {
+                    conn.automaticallyAdjustsVideoMirroring = false
+                    conn.isVideoMirrored = self.mirror
+                }
+                self.lockExposureAndWB(true)
                 let url = FileManager.default.temporaryDirectory
                     .appendingPathComponent(UUID().uuidString + ".mov")
                 self.movieOutput.startRecording(to: url, recordingDelegate: self)
             }
         }
+    }
+
+    /// Как «Lock White Balance on Record» в Blackmagic: фиксируем баланс белого и экспозицию на время записи
+    private func lockExposureAndWB(_ lock: Bool) {
+        guard let d = videoDevice, (try? d.lockForConfiguration()) != nil else { return }
+        if lock {
+            if d.isWhiteBalanceModeSupported(.locked) {
+                d.setWhiteBalanceModeLocked(with: d.deviceWhiteBalanceGains)
+            }
+            if d.isExposureModeSupported(.locked) { d.exposureMode = .locked }
+        } else {
+            if d.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) { d.whiteBalanceMode = .continuousAutoWhiteBalance }
+            if d.isExposureModeSupported(.continuousAutoExposure) { d.exposureMode = .continuousAutoExposure }
+        }
+        d.unlockForConfiguration()
     }
 
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL, from connections: [AVCaptureConnection]) {
@@ -113,6 +141,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
 
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         DispatchQueue.main.async { self.isRecording = false }
+        queue.async { self.lockExposureAndWB(false) }
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else { return }
             PHPhotoLibrary.shared().performChanges({
@@ -135,6 +164,7 @@ final class PreviewView: UIView {
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
     let ready: Bool
+    let mirror: Bool
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
@@ -144,10 +174,10 @@ struct CameraPreview: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
-        // Превью без зеркала, как в Blackmagic Cam
+        // Превью зеркальное, как в Blackmagic Cam (включается кнопкой)
         if let conn = uiView.previewLayer.connection, conn.isVideoMirroringSupported {
             conn.automaticallyAdjustsVideoMirroring = false
-            conn.isVideoMirrored = false
+            conn.isVideoMirrored = mirror
         }
     }
 }

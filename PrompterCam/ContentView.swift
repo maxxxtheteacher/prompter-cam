@@ -45,7 +45,7 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                CameraPreview(session: camera.session, ready: camera.ready)
+                CameraPreview(session: camera.session, ready: camera.ready, mirror: camera.mirror)
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -93,7 +93,7 @@ struct ContentView: View {
                 Text("Шрифт").font(.caption)
                 Slider(value: $fontSize, in: 20...64)
             }
-            HStack(spacing: 28) {
+            HStack(spacing: 20) {
                 Button { showEditor = true } label: { icon("pencil") }
                 Button { prompter.reset() } label: { icon("backward.end.fill") }
                 Button {
@@ -112,17 +112,22 @@ struct ContentView: View {
                     }
                 }
 
-                Button { mirrorText.toggle() } label: { icon("arrow.left.and.right.righttriangle.left.righttriangle.right") }
+                Button { camera.setMirror(!camera.mirror) } label: {
+                    icon("person.crop.square.filled.and.at.rectangle", active: camera.mirror)
+                }
+                Button { mirrorText.toggle() } label: {
+                    icon("arrow.left.and.right.righttriangle.left.righttriangle.right", active: mirrorText)
+                }
             }
         }
         .padding()
         .background(Color.black.opacity(0.55))
     }
 
-    private func icon(_ name: String) -> some View {
+    private func icon(_ name: String, active: Bool = false) -> some View {
         Image(systemName: name)
             .font(.system(size: 22))
-            .foregroundColor(.white)
+            .foregroundColor(active ? .yellow : .white)
             .frame(width: 44, height: 44)
     }
 
