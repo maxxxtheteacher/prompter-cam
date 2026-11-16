@@ -16,6 +16,8 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSCameraUsageDescription: Нужна камера для записи видео.
         NSMicrophoneUsageDescription: Нужен микрофон для записи звука.
         NSPhotoLibraryAddUsageDescription: Нужно сохранять записанные видео в Фото.
