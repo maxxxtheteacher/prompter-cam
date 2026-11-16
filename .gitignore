@@ -1,0 +1,4 @@
+PrompterCam.xcodeproj/
+build/
+*.ipa
+Payload/

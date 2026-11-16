@@ -1,0 +1,26 @@
+name: PrompterCam
+options:
+  bundleIdPrefix: com.maxxx
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  PrompterCam:
+    type: application
+    platform: iOS
+    sources:
+      - PrompterCam
+    info:
+      path: PrompterCam/Info.plist
+      properties:
+        CFBundleDisplayName: Prompter Cam
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSCameraUsageDescription: Нужна камера для записи видео.
+        NSMicrophoneUsageDescription: Нужен микрофон для записи звука.
+        NSPhotoLibraryAddUsageDescription: Нужно сохранять записанные видео в Фото.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxxx.promptercam
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
