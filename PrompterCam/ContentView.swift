@@ -45,7 +45,7 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                CameraPreview(session: camera.session)
+                CameraPreview(session: camera.session, ready: camera.ready)
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {

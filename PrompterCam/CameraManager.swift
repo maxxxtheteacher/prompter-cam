@@ -10,6 +10,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
 
     @Published var isRecording = false
     @Published var info = ""
+    @Published var ready = false
 
     func start() {
         AVCaptureDevice.requestAccess(for: .video) { ok in
@@ -41,42 +42,57 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
         }
         if session.canAddOutput(movieOutput) { session.addOutput(movieOutput) }
 
-        // Выбираем лучший формат: максимум разрешения до 4K при 30 fps
+        // Формат: максимум разрешения до 4K при 30 fps, 8-бит SDR (без HDR/HLG), без binning
         var best: AVCaptureDevice.Format?
-        var bestWidth: Int32 = 0
+        var bestScore = -1
         for format in device.formats {
             let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             guard dims.width <= 3840 else { continue }
             let supports30 = format.videoSupportedFrameRateRanges.contains {
                 $0.minFrameRate <= 30 && $0.maxFrameRate >= 30
             }
-            if supports30 && dims.width > bestWidth {
+            guard supports30 else { continue }
+            let subtype = CMFormatDescriptionGetMediaSubType(format.formatDescription)
+            let is8bit = subtype == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+            let score = Int(dims.width) + (is8bit ? 100_000 : 0) + (format.isVideoBinned ? 0 : 10_000)
+            if score > bestScore {
                 best = format
-                bestWidth = dims.width
+                bestScore = score
             }
         }
         if let best = best, (try? device.lockForConfiguration()) != nil {
             device.activeFormat = best
             device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 30)
             device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
+            if best.isVideoHDRSupported {
+                device.automaticallyAdjustsVideoHDREnabled = false
+                device.isVideoHDREnabled = false
+            }
             device.unlockForConfiguration()
             let d = CMVideoFormatDescriptionGetDimensions(best.formatDescription)
-            DispatchQueue.main.async { self.info = "\(d.width)×\(d.height) 30fps" }
-        }
-
-        if let conn = movieOutput.connection(with: .video) {
-            if movieOutput.availableVideoCodecTypes.contains(.hevc) {
-                movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: conn)
-            }
-            if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
-            if conn.isVideoMirroringSupported {
-                conn.automaticallyAdjustsVideoMirroring = false
-                conn.isVideoMirrored = false   // запись не зеркальная, как в обычной камере
-            }
+            DispatchQueue.main.async { self.info = "\(d.width)×\(d.height) 30fps HEVC 100 Mbps" }
         }
 
         session.commitConfiguration()
+
+        // Настройки соединения для записи (после commit, когда connection уже существует)
+        if let conn = movieOutput.connection(with: .video) {
+            if movieOutput.availableVideoCodecTypes.contains(.hevc) {
+                movieOutput.setOutputSettings([
+                    AVVideoCodecKey: AVVideoCodecType.hevc,
+                    AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 100_000_000]
+                ], for: conn)
+            }
+            if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
+            if conn.isVideoStabilizationSupported { conn.preferredVideoStabilizationMode = .off }
+            if conn.isVideoMirroringSupported {
+                conn.automaticallyAdjustsVideoMirroring = false
+                conn.isVideoMirrored = false   // запись не зеркальная
+            }
+        }
+
         configured = true
+        DispatchQueue.main.async { self.ready = true }
     }
 
     func toggleRecording() {
@@ -118,6 +134,7 @@ final class PreviewView: UIView {
 
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    let ready: Bool
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
@@ -126,5 +143,11 @@ struct CameraPreview: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    func updateUIView(_ uiView: PreviewView, context: Context) {
+        // Превью без зеркала, как в Blackmagic Cam
+        if let conn = uiView.previewLayer.connection, conn.isVideoMirroringSupported {
+            conn.automaticallyAdjustsVideoMirroring = false
+            conn.isVideoMirrored = false
+        }
+    }
 }
