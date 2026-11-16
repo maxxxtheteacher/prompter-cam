@@ -1,0 +1,24 @@
+workflows:
+  promptercam:
+    name: PrompterCam (unsigned IPA)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+      - name: Generate Xcode project
+        script: xcodegen generate
+      - name: Build (unsigned)
+        script: |
+          xcodebuild -project PrompterCam.xcodeproj -scheme PrompterCam \
+            -sdk iphoneos -configuration Release -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package IPA
+        script: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/PrompterCam.app Payload/
+          zip -r PrompterCam.ipa Payload
+    artifacts:
+      - PrompterCam.ipa
