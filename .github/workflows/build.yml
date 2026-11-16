@@ -3,9 +3,13 @@ on:
   push:
   workflow_dispatch:
 
+concurrency:
+  group: build-ipa
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: macos-15-intel
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
