@@ -11,7 +11,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
     @Published var isRecording = false
     @Published var info = ""
     @Published var ready = false
-    @Published var mirror: Bool = (UserDefaults.standard.object(forKey: "mirrorVideo") as? Bool) ?? true
+    @Published var mirror: Bool = (UserDefaults.standard.object(forKey: "mirrorPreview") as? Bool) ?? false
     private var videoDevice: AVCaptureDevice?
 
     @Published var mirrorFile: Bool = (UserDefaults.standard.object(forKey: "mirrorFile") as? Bool) ?? false
@@ -23,7 +23,7 @@ final class CameraManager: NSObject, ObservableObject, AVCaptureFileOutputRecord
 
     func setMirror(_ value: Bool) {
         mirror = value
-        UserDefaults.standard.set(value, forKey: "mirrorVideo")
+        UserDefaults.standard.set(value, forKey: "mirrorPreview")
     }
 
     func start() {
